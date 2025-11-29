@@ -1,3 +1,26 @@
+<?php
+session_start();
+include __DIR__ . "/../config/databasec.php"; // path to your Database class
+
+// Create database object and get connection
+$database = new Database();
+$conn = $database->getconnection();
+
+// Now $conn is defined
+$user_id = $_SESSION['user_id']; // logged-in user
+
+$sql = "SELECT borrow_title, borrow_date, return_date 
+        FROM borrow 
+        WHERE user_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+?>
+
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -157,7 +180,7 @@
   <div class="sidebar">
     <h2>Welcome to Library System!<br>User</h2>
     <button class="modal-btn" onclick="openModal()"> Borrow </button>
-    <button> Reservation </button>
+    <button onclick="openReserve()"> Reservation </button>
     <button>Penalties</a>
    
   </div>
@@ -178,57 +201,66 @@
     </div>
 
     <!-- NEW: Modal -->
-    <div class="modal-bg" id="modal">
-      <div class="modal-box">
-        <h3>Add Borrow Info</h3>
+    <!-- BORROW MODAL -->
+<div class="modal-bg" id="borrowModal">
+  <div class="modal-box">
+    <h3>Add Borrow Info</h3>
 
-        <form action="../controller/libraryprocess.php" method="post">
-             <label>Book Title:</label>
-          <input type="text" name="booktitle" id="bookTitle">
+    <form action="../controller/libraryprocess.php" method="post">
+      <label>Book Title:</label>
+      <input type="text" name="booktitle" id="borrow_bookTitle">
 
-          <label>Borrowed Date:</label>
-          <input type="date" name="borrowdate" id="borrowDate">
+      <label>Borrowed Date:</label>
+      <input type="date" name="borrowdate" id="borrow_borrowDate">
 
-          <label> Return Date:</label>
-          <input type="date" name="returndate" id="returndate">
+      <label>Return Date:</label>
+      <input type="date" name="returndate" id="borrow_returnDate">
 
-          <button class="modal-btn" onclick="addBorrow()" name="borrow">Submit</button>
-          <button class="modal-btn" style="background:#888" onclick="closeModal()">Cancel</button>
-        </form>
-       
-      </div>
-    </div>
+      <button type="submit" class="modal-btn" name="borrow">Submit</button>
+      <button type="button" class="modal-btn" style="background:#888" onclick="closeBorrowModal()">Cancel</button>
+    </form>
+  </div>
+</div>
 
-    <div class="modal-bg" id="modal">
-      <div class="modal-box">
-        <h3>Add Reserved Info</h3>
 
-        <form action="../controller/libraryprocess.php" method="post">
-             <label>Book Title:</label>
-          <input type="text" name="reservetitle" id="bookTitle">
+<!-- RESERVATION MODAL -->
+<div class="modal-bg" id="reserveModal">
+  <div class="modal-box">
+    <h3>Add Reserved Info</h3>
 
-          <label>Reservation Date:</label>
-          <input type="date" name="reservedate" id="borrowDate">
+    <form action="../controller/libraryprocess.php" method="post">
+      <label>Book Title:</label>
+      <input type="text" name="reservetitle" id="reserve_title">
 
-          <label> Pick-up Date:</label>
-          <input type="date" name="pickupdate" id="returndate">
+      <label>Reservation Date:</label>
+      <input type="date" name="reservedate" id="reserve_date">
 
-          <button class="modal-btn" onclick="addreseve()" name="borrow">Submit</button>
-          <button class="modal-btn" style="background:#888" onclick="closeModal()">Cancel</button>
-        </form>
-       
-      </div>
-    </div>
+      <label>Pick-up Date:</label>
+      <input type="date" name="pickupdate" id="reserve_pickupdate">
+
+      <button type="submit" class="modal-btn" name="reservation">Submit</button>
+      <button type="button" class="modal-btn" style="background:#888" onclick="closeReserveModal()">Cancel</button>
+    </form>
+  </div>
+</div>
+
 
     <!-- NEW: Display Table -->
-    <h2 style="margin-top:30px;">Borrowed Books</h2>
     <table id="borrowTable">
-      <tr>
-        <th>Book Title</th>
-        <th>Date Borrowed</th>
-        <th>Return Date </th>
-      </tr>
-    </table>
+  <tr>
+    <th>Book Title</th>
+    <th>Date Borrowed</th>
+    <th>Return Date</th>
+  </tr>
+
+  <?php while ($row = $result->fetch_assoc()): ?>
+    <tr>
+      <td><?php echo $row['borrow_title']; ?></td>
+      <td><?php echo $row['borrow_date']; ?></td>
+      <td><?php echo $row['return_date']; ?></td>
+    </tr>
+  <?php endwhile; ?>
+</table>
 
 
     
@@ -236,48 +268,35 @@
 
   <!-- NEW: JavaScript -->
   <script>
-    function openModal() {
-      document.getElementById("modal").style.display = "flex";
+  // OPEN / CLOSE BORROW MODAL
+  function openModal() {
+    document.getElementById("borrowModal").style.display = "flex";
+  }
+  function closeBorrowModal() {
+    document.getElementById("borrowModal").style.display = "none";
+  }
+
+  // OPEN / CLOSE RESERVE MODAL
+  function openReserve() {
+    document.getElementById("reserveModal").style.display = "flex";
+  }
+  function closeReserveModal() {
+    document.getElementById("reserveModal").style.display = "none";
+  }
+
+  // Validate reservation modal before submit (optional)
+  function addreserve() {
+    let a = document.getElementById("reserve_title").value;
+    let b = document.getElementById("reserve_date").value;
+    let c = document.getElementById("reserve_pickupdate").value;
+
+    if (a === "" || b === "" || c === "") {
+      alert("Fill all fields");
+      return false;
     }
+  }
+</script>
 
-    function closeModal() {
-      document.getElementById("modal").style.display = "none";
-    }
-
-    function addreserve(){
-        let reservetitle = document.getElementById("reservetitle").value;
-        let reservedate = document.getElementById("reservedate").value;
-        let pickupdate = document.getElementById("pickupdate").value;
-
-      if(reservetitle === "" || reservedate ==="" || pickupdate===""){
-          alert("Fill all fields");
-          return;
-      }
-    }
-
-
-    function addBorrow() {
-      let title = document.getElementById("bookTitle").value;
-      let date = document.getElementById("borrowDate").value;
-      let returndate = document.getElementById("").value;
-
-      if (title === "" || date === "" || returndate ==="") {
-        alert("Fill up all fields!");
-        return;
-      }
-
-      let table = document.getElementById("borrowTable");
-      let row = table.insertRow(-1);
-
-      row.insertCell(0).innerHTML = title;
-      row.insertCell(1).innerHTML = date;
-
-      closeModal();
-      document.getElementById("bookTitle").value = "";
-      document.getElementById("borrowDate").value = "";
-      document.getElementById("returndate").value = "";
-    }
-  </script>
 
 </body>
 </html>
