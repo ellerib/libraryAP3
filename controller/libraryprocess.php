@@ -29,16 +29,18 @@
 
         // Borrow book and get alert message
         $message = $borrow->borrow_book($conn);
-        
+
+        // RESERVATION PROCESS (placeholder)
+        if(isset($_POST['reservation'])){
+            $reservationtitle = trim($_POST['reservetitle']);
+            $reservationdate = trim($_POST['reservedate']);
+            $pickupdate = trim($_POST['pickupdate']);
+
+            // Implement reservation logic here
+        }
+            
     }
 
-    // RESERVATION PROCESS (placeholder)
-    if(isset($_POST['reservation'])){
-        $reservationtitle = trim($_POST['reservetitle']);
-        $reservationdate = trim($_POST['reservedate']);
-        $pickupdate = trim($_POST['pickupdate']);
-
-        // Implement reservation logic here
-    }
+    
 }
 ?>
