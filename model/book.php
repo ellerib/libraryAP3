@@ -1,5 +1,4 @@
 <?php
-
     class Book extends User{
         public $book_id;
         public $isbn;
