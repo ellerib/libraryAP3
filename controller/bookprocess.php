@@ -1,22 +1,32 @@
 <?php
 session_start();
 include __DIR__ . "/../config/databasec.php";
-include __DIR__ . "/../models/book.php";
+include __DIR__ . "/../model/book.php";
 
 $database = new Database();
 $conn = $database->getconnection();
 
-if(isset($_POST['addbook'])){
+if($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['addbook'])) {
     $book = new Book(
-        null, // auto-increment ID
+        null,
         $_POST['isbn'],
         $_POST['title'],
-        $_POST['author']
+        $_POST['author'],
+        $_POST['quantity']
     );
 
     $book->add_book($conn);
 
-    // Redirect back to dashboard after adding
-    header("Location: ../views/librarianpage.php"); 
+    header("Location: ../view/librarianpage.php");
     exit();
 }
+
+// ARCHIVE BOOK
+if($_SERVER["REQUEST_METHOD"] == 'POST' && isset($_POST['archive_book']) && isset($_POST['book_id'])){
+    $book = new Book($_POST['book_id'], null, null, null, null);
+    $book->archive_book($conn);
+    header("Location: ../view/librarianpage.php");
+    exit();
+}
+
+?>

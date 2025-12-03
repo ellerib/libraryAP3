@@ -10,7 +10,7 @@
 
     // Fetch card counts
     $totalBooks = $conn->query("SELECT COUNT(*) as count FROM books")->fetch_assoc()['count'];
-    // $borrowedBooks = $conn->query("SELECT COUNT(*) as count FROM books WHERE status='Borrowed'")->fetch_assoc()['count'];
+    
     $archivedBooks = $conn->query("SELECT COUNT(*) as count FROM book_archive")->fetch_assoc()['count'];
 ?>
 
@@ -75,8 +75,6 @@ tr:hover {background:#f4f8f5;}
   <ul class="nav-list">
     <button onclick="openAddBookModal()">📚 Add Book</button>
     <li><a href="#">📦 Archived Books</a></li>
-    <li><a href="#">👤 Manage Users</a></li>
-    <li><a href="#">📖 Borrowed Books</a></li>
     <li><a href="#">🚪 Logout</a></li>
   </ul>
 </div>
@@ -91,10 +89,7 @@ tr:hover {background:#f4f8f5;}
       <h3>Total Books</h3>
       <p><?php echo $totalBooks; ?></p>
     </div>
-    <div class="card" onclick="filterTable('Borrowed')">
-      <h3>Borrowed</h3>
-      <p><?php echo $borrowedBooks; ?></p>
-    </div>
+    
     <div class="card" onclick="filterTable('Archived')">
       <h3>Archived</h3>
       <p><?php echo $archivedBooks; ?></p>
@@ -107,19 +102,23 @@ tr:hover {background:#f4f8f5;}
       <th>Book Title</th>
       <th>Author</th>
       <th>ISBN</th>
-      <th>Status</th>
+      <th>Quantity</th>
       <th>Action</th>
     </tr>
     <?php while($row = $books->fetch_assoc()): ?>
-    <tr data-status="<?php echo $row['status']; ?>">
-      <td><?php echo $row['title']; ?></td>
-      <td><?php echo $row['author']; ?></td>
-      <td><?php echo $row['isbn']; ?></td>
-      <td><?php echo $row['status'] ?? 'Available'; ?></td>
-      <td>
-        <button class="action-btn edit-btn">Edit</button>
-        <button class="action-btn delete-btn">Archive</button>
-      </td>
+
+      <td> <?php echo $row['title']; ?> </td>
+      <td> <?php echo $row['author']; ?> </td>
+      <td> <?php echo $row['isbn']; ?> </td>
+      <td> <?php echo $row['quantity'];?> </td>
+     <td>
+    <button class="action-btn edit-btn">Edit</button>
+    <button class="action-btn delete-btn" 
+            onclick="openArchiveModal(<?php echo $row['book_id']; ?>, '<?php echo addslashes($row['title']); ?>')">
+        Archive
+    </button>
+</td>
+
     </tr>
     <?php endwhile; ?>
   </table>
@@ -129,19 +128,45 @@ tr:hover {background:#f4f8f5;}
 <div class="modal-bg" id="addBookModal">
   <div class="modal-box">
     <h3>Add New Book</h3>
-    <form method="post">
-      <input type="text" name="title" placeholder="Title" required>
-      <input type="text" name="author" placeholder="Author" required>
-      <input type="text" name="isbn" placeholder="ISBN" required>
-      <button type="submit" name="addbook" class="modal-btn">Add Book</button>
-      <button type="button" class="modal-btn" style="background:#888" onclick="closeAddBookModal()">Cancel</button>
+    <form method="post" action="../controller/bookprocess.php">
+  <input type="text" name="title" placeholder="Title" required>
+  <input type="text" name="author" placeholder="Author" required>
+  <input type="text" name="isbn" placeholder="ISBN" required>
+  <input type="text" name="quantity" placeholder="Quantity" required>
+  <button type="submit" name="addbook" class="modal-btn">Add Book</button>
+  <button type="button" class="modal-btn" style="background:#888" onclick="closeAddBookModal()">Cancel</button>
+</form>
+
+  </div>
+</div>
+
+<!-- Archive Book Modal -->
+<div class="modal-bg" id="archiveModal">
+  <div class="modal-box">
+    <h3>Archive Book</h3>
+    <p id="archiveBookTitle">Are you sure you want to archive this book?</p>
+    <form method="post" action="../controller/bookprocess.php">
+        <input type="hidden" name="book_id" id="archiveBookId">
+        <button type="submit" name="archive_book" class="modal-btn">Yes, Archive</button>
+        <button type="button" class="modal-btn" style="background:#888" onclick="closeArchiveModal()">Cancel</button>
     </form>
   </div>
 </div>
 
+
 <script>
 function openAddBookModal(){ document.getElementById('addBookModal').style.display='flex'; }
 function closeAddBookModal(){ document.getElementById('addBookModal').style.display='none'; }
+
+function openArchiveModal(bookId, bookTitle){
+    document.getElementById('archiveBookId').value = bookId;
+    document.getElementById('archiveBookTitle').innerText = "Are you sure you want to archive: " + bookTitle + "?";
+    document.getElementById('archiveModal').style.display = 'flex';
+}
+
+function closeArchiveModal(){
+    document.getElementById('archiveModal').style.display = 'none';
+}
 
 // Filter table rows by status
 function filterTable(status) {
