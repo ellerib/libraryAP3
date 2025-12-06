@@ -1,11 +1,63 @@
+<?php
+session_start();
+include __DIR__ . "/../config/databasec.php";
+$database = new Database();
+$conn = $database->getconnection();
+
+// Assuming your session stores user info
+$user_id = $_SESSION['user_id'] ?? null;
+$user_type = $_SESSION['user_type'] ?? null;
+
+if(!$user_id){
+    header("Location: login.php");
+    exit();
+}
+
+// Fetch all available books
+$books_result = $conn->query("SELECT book_id, title, quantity, price FROM books WHERE quantity > 0");
+$books = [];
+while($row = $books_result->fetch_assoc()){
+    $books[] = $row;
+}
+
+// Fetch borrowed books by user
+$stmt = $conn->prepare("
+    SELECT b.title AS borrow_title, bb.borrow_date, bb.return_date, b.price
+    FROM borrow bb
+    JOIN books b ON bb.book_id = b.book_id
+    WHERE bb.user_id = ?
+");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
+// Count borrowed books
+$stmt2 = $conn->prepare("SELECT COUNT(*) as count FROM borrow WHERE user_id = ?");
+$stmt2->bind_param("i", $user_id);
+$stmt2->execute();
+$borrowCount = $stmt2->get_result()->fetch_assoc()['count'];
+
+// Calculate total penalty for overdue books
+$penalty = 0;
+$borrowedBooks = [];
+while($row = $result->fetch_assoc()){
+    $status = (strtotime($row['return_date']) < time()) ? 'Overdue' : 'Borrowed';
+    if($status === 'Overdue'){
+        $penalty += $row['price']; // Assuming penalty = book price
+    }
+    $row['status'] = $status;
+    $borrowedBooks[] = $row;
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Student Dashboard - Library System</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Dashboard</title>
 
-<style>
+    <style>
     * { margin:0; padding:0; box-sizing:border-box; font-family: "Roboto", sans-serif; }
     body { background:#f3f6f4; }
 
@@ -173,82 +225,102 @@
     }
 
 </style>
+
+
 </head>
 <body>
 
-<!-- SIDEBAR -->
+<!-- Sidebar -->
 <div class="sidebar">
-    <h2>Welcome to Library<br>Student Panel</h2>
-    <button onclick="openModal()">Borrow</button>
-    <button onclick="openReserve()">Reservation</button>
+    <h2>Welcome Student</h2>
+    <button onclick="openBorrowModal()" <?php echo ($borrowCount >= 3) ? 'disabled style="background:#999;cursor:not-allowed;"' : ''; ?>>Borrow</button>
+    <button onclick="openReserveModal()">Reserve</button>
     <button>Penalties</button>
+    <button>View Reservations</button>
 </div>
 
-<!-- TOPBAR -->
+<!-- Topbar -->
 <div class="topbar">
     <form action="logout.php" method="post">
         <button type="submit" class="logout-btn">Logout</button>
     </form>
 </div>
 
-<!-- MAIN CONTENT -->
+<!-- Main Content -->
 <div class="main-content">
-
     <div class="cards">
-        <div class="card"><div class="card-header">Total Borrowed</div><div class="card-body">3</div></div>
-        <div class="card"><div class="card-header">Reservations</div><div class="card-body">2</div></div>
-        <div class="card"><div class="card-header">Penalties</div><div class="card-body">₱50</div></div>
+        <div class="card">
+            <div class="card-header">Total Borrowed</div>
+            <div class="card-body"><?php echo $borrowCount; ?></div>
+        </div>
+        <div class="card">
+            <div class="card-header">Reservations</div>
+            <div class="card-body">--</div>
+        </div>
+        <div class="card">
+            <div class="card-header">Total Penalties</div>
+            <div class="card-body">₱<?php echo $penalty; ?></div>
+        </div>
     </div>
 
     <table>
         <tr>
             <th>Book Title</th>
-            <th>Date Borrowed</th>
+            <th>Borrow Date</th>
             <th>Return Date</th>
+            <th>Status</th>
         </tr>
-        <!-- PHP rows inserted here -->
-        <?php if(isset($result)) while ($row = $result->fetch_assoc()): ?>
-        <tr>
-            <td><?php echo $row['borrow_title']; ?></td>
+        <?php foreach($borrowedBooks as $row): ?>
+        <tr style="<?php echo ($row['status'] === 'Overdue') ? 'background:#fdd;' : ''; ?>">
+            <td><?php echo htmlspecialchars($row['borrow_title']); ?></td>
             <td><?php echo $row['borrow_date']; ?></td>
             <td><?php echo $row['return_date']; ?></td>
+            <td><?php echo $row['status']; ?></td>
         </tr>
-        <?php endwhile; ?>
+        <?php endforeach; ?>
     </table>
 </div>
 
-<!-- MODALS -->
+<!-- Borrow Modal -->
 <div class="modal-bg" id="borrowModal">
     <div class="modal-box">
-        <h3>Add Borrow Info</h3>
-        <form action="../controller/libraryprocess.php" method="post">
-            <input type="text" name="booktitle" placeholder="Book Title">
-            <input type="date" name="borrowdate">
-            <input type="date" name="returndate">
+        <h3>Borrow Book</h3>
+        <form method="post" action="../controller/libraryprocess.php">
+            <select name="book_id" required>
+                <option value="">Select Book</option>
+                <?php foreach($books as $book): ?>
+                    <option value="<?php echo $book['book_id']; ?>">
+                        <?php echo htmlspecialchars($book['title']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <input type="date" name="borrow_date" required>
+            <input type="date" name="return_date" required>
             <button class="modal-btn" name="borrow">Submit</button>
             <button type="button" class="modal-btn" style="background:#777" onclick="closeBorrowModal()">Cancel</button>
         </form>
     </div>
 </div>
 
+<!-- Reserve Modal -->
 <div class="modal-bg" id="reserveModal">
     <div class="modal-box">
-        <h3>Add Reservation</h3>
-        <form action="../controller/libraryprocess.php" method="post">
-            <input type="text" name="reservetitle" placeholder="Book Title">
-            <input type="date" name="reservedate">
-            <input type="date" name="pickupdate">
-            <button class="modal-btn" name="reservation">Submit</button>
+        <h3>Reserve Book</h3>
+        <form method="post" action="../controller/libraryprocess.php">
+            <input type="text" name="reserve_title" placeholder="Book Title">
+            <input type="date" name="reserve_date">
+            <input type="date" name="pickup_date">
+            <button class="modal-btn" name="reserve">Submit</button>
             <button type="button" class="modal-btn" style="background:#777" onclick="closeReserveModal()">Cancel</button>
         </form>
     </div>
 </div>
 
 <script>
-function openModal(){ document.getElementById("borrowModal").style.display="flex"; }
+function openBorrowModal(){ document.getElementById("borrowModal").style.display="flex"; }
 function closeBorrowModal(){ document.getElementById("borrowModal").style.display="none"; }
 
-function openReserve(){ document.getElementById("reserveModal").style.display="flex"; }
+function openReserveModal(){ document.getElementById("reserveModal").style.display="flex"; }
 function closeReserveModal(){ document.getElementById("reserveModal").style.display="none"; }
 </script>
 

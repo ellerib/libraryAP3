@@ -15,16 +15,17 @@
     if($_SERVER["REQUEST_METHOD"] == 'POST'){
         // BORROW PROCESS
         if(isset($_POST['borrow'])){
-        $borrow_title = trim($_POST['booktitle']);
+        
         $borrow_date = trim($_POST['borrowdate']);
         $return_date = trim($_POST['returndate']);
         $book_id = $_POST['book_id'];
 
-        if(empty($borrow_title) || empty($borrow_date) || empty($return_date)){
+       if(empty($book_id) || empty($borrow_date) || empty($return_date)){
             die("<script>alert('All fields are required!'); window.history.back();</script>");
         }
 
-        $borrow = new Borrow($borrow_title, $borrow_date, $return_date);
+
+        $borrow = new Borrow($borrow_date, $return_date);
         $borrow->setuserandbookinfo($book_id, $user_id);
 
         // Borrow book and get alert message
