@@ -12,24 +12,25 @@ if(!$user_id){
     exit();
 }
 
-// Fetch reservations
+// Fetch penalties
 $stmt = $conn->prepare("
-    SELECT r.reservation_id, r.reservation_date, r.pickup_date, r.status, 
-           b.title AS reserve_title
-    FROM reservation r
-    JOIN books b ON r.book_id = b.book_id
-    WHERE r.user_id = ? AND r.status = 'Pending'
-    ORDER BY r.reservation_date DESC
+    SELECT b.title AS book_title, br.borrow_date, br.return_date,
+           p.amount AS penalty_amount, p.status
+    FROM penalties p
+    JOIN borrow br ON p.borrow_id = br.borrow_id
+    JOIN books b ON br.book_id = b.book_id
+    WHERE p.user_id = ?
+    ORDER BY br.return_date DESC
 ");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
-$reservations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$penalties = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang='en'>
 <head>
 <meta charset='UTF-8'>
-<title>My Reservations</title>
+<title>My Penalties</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Roboto,sans-serif;}
 body{background:#f3f6f4;}
@@ -65,7 +66,7 @@ tr:hover{background:#f2f7f3;}
 <body>
 
 <div class="sidebar">
-    <h2>My Reservations</h2>
+    <h2>My Penalties</h2>
     <button onclick="window.location.href='studentpage.php'">Dashboard</button>
     <button onclick="window.location.href='viewreservation.php'">View Reservations</button>
     <button onclick="window.location.href='viewpenalties.php'">View Penalties</button>
@@ -81,22 +82,22 @@ tr:hover{background:#f2f7f3;}
     <table>
         <tr>
             <th>Book Title</th>
-            <th>Reservation Date</th>
-            <th>Pickup Date</th>
-            <th>Status</th>
+            <th>Borrow Date</th>
+            <th>Return Date</th>
+            <th>Penalty (₱)</th>
         </tr>
 
-        <?php if(!empty($reservations)): ?>
-            <?php foreach($reservations as $row): ?>
+        <?php if(!empty($penalties)): ?>
+            <?php foreach($penalties as $row): ?>
                 <tr>
-                    <td><?= htmlspecialchars($row['reserve_title']) ?></td>
-                    <td><?= $row['reservation_date'] ?></td>
-                    <td><?= $row['pickup_date'] ?></td>
-                    <td><?= ucfirst($row['status']) ?></td>
+                    <td><?= htmlspecialchars($row['book_title']) ?></td>
+                    <td><?= $row['borrow_date'] ?></td>
+                    <td><?= $row['return_date'] ?></td>
+                    <td><?= number_format($row['penalty_amount'], 2) ?></td>
                 </tr>
             <?php endforeach; ?>
         <?php else: ?>
-            <tr><td colspan="4" style="text-align:center;">No reservations found.</td></tr>
+            <tr><td colspan="4" style="text-align:center;">No penalties found.</td></tr>
         <?php endif; ?>
     </table>
 </div>

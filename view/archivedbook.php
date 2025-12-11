@@ -6,7 +6,8 @@ $database = new Database();
 $conn = $database->getconnection();
 
 // Fetch all archived books
-$books = $conn->query("SELECT * FROM book_archive ORDER BY book_id DESC");
+$books = $conn->query("SELECT * FROM book_archive ORDER BY archive_id DESC");
+
 
 // Card counts
 // $totalBooks = $conn->query("SELECT COUNT(*) as count FROM books")->fetch_assoc()['count'];
@@ -56,7 +57,7 @@ tr:hover {background:#f4f8f5;}
   <ul class="nav-list">
     <li><a href="../view/librarianpage.php">📚 Dashboard</a></li>
     <li><a href="#">📦 Archived Books</a></li>
-    <li><a href="logout.php">🚪 Logout</a></li>
+    <li><a href="../controller/logout.php">🚪 Logout</a></li>
   </ul>
 </div>
 

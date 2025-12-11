@@ -1,14 +1,28 @@
 <?php
-session_start();
-include __DIR__ . "/../config/databasec.php";
-$database = new Database();
-$conn = $database->getconnection();
+  if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+    }
 
-// Fetch active books only
-$books = $conn->query("SELECT * FROM books WHERE status='active' ORDER BY book_id DESC");
+    include __DIR__ . "/../config/databasec.php";
 
-// Card counts
-$totalBooks = $conn->query("SELECT COUNT(*) as count FROM books WHERE status='active'")->fetch_assoc()['count'];
+    // Redirect to login if not logged in or not a student
+    if(!isset($_SESSION['user_id'], $_SESSION['user_type']) || $_SESSION['user_type'] !== 'librarian') {
+        header("Location: ../view/login.php");
+        exit();
+    }
+
+    $user_id = $_SESSION['user_id'];
+    $database = new Database();
+    $conn = $database->getconnection();
+
+
+
+
+  // Fetch active books only
+  $books = $conn->query("SELECT * FROM books WHERE status='active' ORDER BY book_id DESC");
+
+  // Card counts
+  $totalBooks = $conn->query("SELECT COUNT(*) as count FROM books WHERE status='active'")->fetch_assoc()['count'];
 
 ?>
 
@@ -74,7 +88,7 @@ tr:hover {background:#f4f8f5;}
   <ul class="nav-list">
     <button onclick="openAddBookModal()">📚 Add Book</button>
     <li><a href="archivedbook.php">📦 Archived Books</a></li>
-    <li><a href="logout.php">🚪 Logout</a></li>
+    <li><a href="../controller/logout.php">🚪 Logout</a></li>
   </ul>
 </div>
 
@@ -85,6 +99,9 @@ tr:hover {background:#f4f8f5;}
     <div class="card"><h3>Total Books</h3><p><?php echo $totalBooks; ?></p></div>
     
   </div>
+
+  <!-- Topbar -->
+
 
   <table>
     <tr>
@@ -101,7 +118,14 @@ tr:hover {background:#f4f8f5;}
       <td><?php echo $row['isbn']; ?></td>
       <td><?php echo $row['quantity']; ?></td>
       <td>
-        <button class="action-btn edit-btn" onclick="openEditModal(<?php echo $row['book_id']; ?>,'<?php echo addslashes($row['title']); ?>','<?php echo addslashes($row['author']); ?>','<?php echo $row['isbn']; ?>',<?php echo $row['quantity']; ?>)">Edit</button>
+        <button class="action-btn edit-btn"
+            onclick="openEditModal(
+                <?php echo $row['book_id']; ?>,
+                '<?php echo $row['isbn']; ?>',
+                '<?php echo $row['price']; ?>'
+              )">
+        Edit</button>
+
         <button class="action-btn archive-btn" onclick="openArchiveModal(<?php echo $row['book_id']; ?>,'<?php echo addslashes($row['title']); ?>')">Archive</button>
       </td>
     </tr>
@@ -130,16 +154,17 @@ tr:hover {background:#f4f8f5;}
     <h3>Edit Book</h3>
     <form method="post" action="../controller/bookprocess.php">
       <input type="hidden" name="book_id" id="editBookId">
-      <input type="text" name="title" id="editTitle" required>
-      <input type="text" name="author" id="editAuthor" required>
+
       <input type="text" name="isbn" id="editISBN" required>
-      <input type="number" name="quantity" id="editQuantity" required>
       <input type="number" name="price" id="editPrice" required>
+
       <button type="submit" name="updatebook" class="modal-btn">Update Book</button>
       <button type="button" class="modal-btn cancel" onclick="closeEditModal()">Cancel</button>
     </form>
   </div>
 </div>
+
+
 
 <div class="modal-bg" id="archiveModal">
   <div class="modal-box">
@@ -157,14 +182,14 @@ tr:hover {background:#f4f8f5;}
 function openAddBookModal(){ document.getElementById('addBookModal').style.display='flex'; }
 function closeAddBookModal(){ document.getElementById('addBookModal').style.display='none'; }
 
-function openEditModal(id,title,author,isbn,quantity){
+function openEditModal(id, isbn, price){
     document.getElementById('editBookId').value = id;
-    document.getElementById('editTitle').value = title;
-    document.getElementById('editAuthor').value = author;
     document.getElementById('editISBN').value = isbn;
-    document.getElementById('editQuantity').value = quantity;
-    document.getElementById('editBookModal').style.display='flex';
+    document.getElementById('editPrice').value = price;
+    document.getElementById('editBookModal').style.display = 'flex';
 }
+
+
 function closeEditModal(){ document.getElementById('editBookModal').style.display='none'; }
 
 function openArchiveModal(id,title){

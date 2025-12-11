@@ -1,54 +1,64 @@
 <?php
 session_start();
 include __DIR__ . "/../config/databasec.php";
-$database = new Database();
-$conn = $database->getconnection();
 
-// Assuming your session stores user info
-$user_id = $_SESSION['user_id'] ?? null;
-$user_type = $_SESSION['user_type'] ?? null;
-
-if(!$user_id){
-    header("Location: login.php");
+if (!isset($_SESSION['user_id'], $_SESSION['user_type']) || $_SESSION['user_type'] !== 'student') {
+    header("Location: ../view/login.php");
     exit();
 }
 
-// Fetch all available books
-$books_result = $conn->query("SELECT book_id, title, quantity, price FROM books WHERE quantity > 0");
+$user_id = $_SESSION['user_id'];
+$database = new Database();
+$conn = $database->getconnection();
+
+// Fetch available books (active)
 $books = [];
-while($row = $books_result->fetch_assoc()){
+$bookQuery = "SELECT book_id, title, quantity, price FROM books WHERE quantity > 0 AND status = 'active'";
+$result = $conn->query($bookQuery);
+while ($row = $result->fetch_assoc()) {
     $books[] = $row;
 }
 
-// Fetch borrowed books by user
+// Fetch borrowed books (only active borrows: Borrowed or Overdue)
+$borrowedBooks = [];
 $stmt = $conn->prepare("
-    SELECT b.title AS borrow_title, bb.borrow_date, bb.return_date, b.price
-    FROM borrow bb
-    JOIN books b ON bb.book_id = b.book_id
-    WHERE bb.user_id = ?
+    SELECT bo.title AS borrow_title, b.borrow_date, b.return_date, b.status, bo.price
+    FROM borrow b
+    JOIN books bo ON b.book_id = bo.book_id
+    WHERE b.user_id = ? AND b.status IN ('Borrowed','Overdue')
+    ORDER BY b.borrow_date DESC
 ");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
-$result = $stmt->get_result();
+$borrowedBooks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Count borrowed books
-$stmt2 = $conn->prepare("SELECT COUNT(*) as count FROM borrow WHERE user_id = ?");
-$stmt2->bind_param("i", $user_id);
-$stmt2->execute();
-$borrowCount = $stmt2->get_result()->fetch_assoc()['count'];
+// Count active borrows (Borrowed or Overdue)
+$stmtCount = $conn->prepare("SELECT COUNT(*) AS cnt FROM borrow WHERE user_id = ? AND status IN ('Borrowed','Overdue')");
+$stmtCount->bind_param("i", $user_id);
+$stmtCount->execute();
+$borrowCount = $stmtCount->get_result()->fetch_assoc()['cnt'] ?? 0;
 
-// Calculate total penalty for overdue books
-$penalty = 0;
-$borrowedBooks = [];
-while($row = $result->fetch_assoc()){
-    $status = (strtotime($row['return_date']) < time()) ? 'Overdue' : 'Borrowed';
-    if($status === 'Overdue'){
-        $penalty += $row['price']; // Assuming penalty = book price
+// Count active reservations (Pending or Approved)
+$stmtRes = $conn->prepare("SELECT COUNT(*) AS cnt FROM reservation WHERE user_id = ? AND status IN ('Pending','Approved')");
+$stmtRes->bind_param("i", $user_id);
+$stmtRes->execute();
+$reservation_count = $stmtRes->get_result()->fetch_assoc()['cnt'] ?? 0;
+
+// Calculate penalties (simple sum using book price for overdue items)
+$penalty = 0.00;
+foreach ($borrowedBooks as &$row) {
+    if (!empty($row['return_date']) && strtotime($row['return_date']) < time() && $row['status'] === 'Borrowed') {
+        // mark as overdue locally (DB update of status to 'Overdue' should be done by cron or staff process)
+        $row['status'] = 'Overdue';
     }
-    $row['status'] = $status;
-    $borrowedBooks[] = $row;
+    if ($row['status'] === 'Overdue') {
+        $penalty += floatval($row['price']);
+    }
 }
+unset($row); // good practice
 ?>
+
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -191,6 +201,15 @@ while($row = $result->fetch_assoc()){
         align-items:center;
         z-index:10;
     }
+    .modal-box select {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: white;
+}
+
 
     .modal-box {
         background:white;
@@ -233,15 +252,21 @@ while($row = $result->fetch_assoc()){
 <!-- Sidebar -->
 <div class="sidebar">
     <h2>Welcome Student</h2>
-    <button onclick="openBorrowModal()" <?php echo ($borrowCount >= 3) ? 'disabled style="background:#999;cursor:not-allowed;"' : ''; ?>>Borrow</button>
-    <button onclick="openReserveModal()">Reserve</button>
-    <button>Penalties</button>
-    <button>View Reservations</button>
+    <button onclick="openBorrowModal()" <?php echo ($borrowCount >= 3) ? 'disabled style="background:#999;cursor:not-allowed;"' : ''; ?>>
+    Borrow
+</button>
+    <button onclick="openReserveModal()">Reservation</button>
+    <button onclick="window.location.href='viewreservation.php'"> View Reservations </button>
+    <button onclick="window.location.href='viewpenalties.php'"> View Penalties</button>
+
+    
+</select>
+
 </div>
 
 <!-- Topbar -->
 <div class="topbar">
-    <form action="logout.php" method="post">
+    <form action="/../controller/logout.php" method="post">
         <button type="submit" class="logout-btn">Logout</button>
     </form>
 </div>
@@ -255,7 +280,7 @@ while($row = $result->fetch_assoc()){
         </div>
         <div class="card">
             <div class="card-header">Reservations</div>
-            <div class="card-body">--</div>
+            <div class="card-body"> <?php echo $reservation_count?></div>
         </div>
         <div class="card">
             <div class="card-header">Total Penalties</div>
@@ -263,29 +288,28 @@ while($row = $result->fetch_assoc()){
         </div>
     </div>
 
-    <table>
-        <tr>
-            <th>Book Title</th>
-            <th>Borrow Date</th>
-            <th>Return Date</th>
-            <th>Status</th>
-        </tr>
-        <?php foreach($borrowedBooks as $row): ?>
-        <tr style="<?php echo ($row['status'] === 'Overdue') ? 'background:#fdd;' : ''; ?>">
-            <td><?php echo htmlspecialchars($row['borrow_title']); ?></td>
-            <td><?php echo $row['borrow_date']; ?></td>
-            <td><?php echo $row['return_date']; ?></td>
-            <td><?php echo $row['status']; ?></td>
-        </tr>
-        <?php endforeach; ?>
-    </table>
+   <table>
+    <tr>
+        <th>Book Title</th>
+        <th>Borrow Date</th>
+        <th>Return Date</th>
+    </tr>
+    <?php foreach($borrowedBooks as $row): ?>
+    <tr>
+        <td><?php echo htmlspecialchars($row['borrow_title']); ?></td>
+        <td><?php echo $row['borrow_date']; ?></td>
+        <td><?php echo $row['return_date']; ?></td>
+    </tr>
+    <?php endforeach; ?>
+</table>
+
 </div>
 
 <!-- Borrow Modal -->
 <div class="modal-bg" id="borrowModal">
     <div class="modal-box">
         <h3>Borrow Book</h3>
-        <form method="post" action="../controller/libraryprocess.php">
+        <form method="post" action="../controller/student_libraryprocess.php">
             <select name="book_id" required>
                 <option value="">Select Book</option>
                 <?php foreach($books as $book): ?>
@@ -294,27 +318,54 @@ while($row = $result->fetch_assoc()){
                     </option>
                 <?php endforeach; ?>
             </select>
-            <input type="date" name="borrow_date" required>
-            <input type="date" name="return_date" required>
+
+            <input type="date" name="borrowdate" required>
+            <input type="date" name="returndate" required>
+
+            <!-- Semester dropdown -->
+            <select name="semester" required>
+                <option value="">Select Semester</option>
+                <option value="1">1st Semester</option>
+                <option value="2">2nd Semester</option>
+            </select>
+
             <button class="modal-btn" name="borrow">Submit</button>
             <button type="button" class="modal-btn" style="background:#777" onclick="closeBorrowModal()">Cancel</button>
         </form>
     </div>
 </div>
 
+
 <!-- Reserve Modal -->
 <div class="modal-bg" id="reserveModal">
     <div class="modal-box">
         <h3>Reserve Book</h3>
-        <form method="post" action="../controller/libraryprocess.php">
-            <input type="text" name="reserve_title" placeholder="Book Title">
-            <input type="date" name="reserve_date">
-            <input type="date" name="pickup_date">
+        <form method="post" action="../controller/student_libraryprocess.php">
+            <select name="reserve_book_id" required>
+                <option value="">Select Book</option>
+                <?php foreach($books as $book): ?>
+                    <option value="<?php echo $book['book_id']; ?>">
+                        <?php echo htmlspecialchars($book['title']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <input type="date" name="reserve_date" required>
+            <input type="date" name="pickup_date" required>
+
+
+            <!-- Semester dropdown -->
+            <select name="semester" required>
+                <option value="">Select Semester</option>
+                <option value="1">1st Semester</option>
+                <option value="2">2nd Semester</option>
+            </select>
+            
             <button class="modal-btn" name="reserve">Submit</button>
             <button type="button" class="modal-btn" style="background:#777" onclick="closeReserveModal()">Cancel</button>
         </form>
     </div>
 </div>
+
 
 <script>
 function openBorrowModal(){ document.getElementById("borrowModal").style.display="flex"; }

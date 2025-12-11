@@ -1,18 +1,13 @@
 <?php
-include "../config/databasec.php";
-require_once "../model/user.php";
+    session_start();
+    include_once __DIR__ . "/../model/User.php";
 
-session_start();
-
-if($_SERVER["REQUEST_METHOD"]=='POST'){
-
-    // LOGIN
-    if(isset($_POST['login'])){
+    if(isset($_POST['login'])) {
         $email = trim($_POST['email']);
         $password = trim($_POST['password']);
 
-        $login = new User("", "", $email, $password, "");
-        $login->login();
+        $user = new User("", "", $email, $password);
+        $user->login(); // will set session and redirect
     }
 
     // REGISTER
@@ -24,9 +19,8 @@ if($_SERVER["REQUEST_METHOD"]=='POST'){
         $role = trim($_POST['role']);
 
         $register = new User($lastname, $firstname, $email, $password, $role);
-        $register->verify_email();
         $register->register();
     }
-}
 
 ?>
+
